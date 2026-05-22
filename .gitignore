@@ -1,0 +1,12 @@
+# Ignore configuration files containing private tokens
+config/config.json
+
+# Ignore generated proof images
+*.png
+
+# Ignore virtual environments, local logs, and start scripts
+__pycache__/
+*.pyc
+start.bat
+.system_generated/
+.gemini/
