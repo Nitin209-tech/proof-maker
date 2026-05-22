@@ -3,53 +3,17 @@ from discord import app_commands
 import datetime, random, traceback, json, os, base64
 from html2image import Html2Image
 
+hti = Html2Image(custom_flags=["--default-background-color=ffffff"])
+hti.browser.use_new_headless = None
+config = json.load(open("config/config.json"))
 current_directory = os.path.abspath(os.path.dirname(__file__))
 
-# ── Token: Railway env variable takes priority, fallback to config file ──
-BOT_TOKEN = os.environ.get("BOT_TOKEN")
-DEFAULT_AVATAR = os.environ.get("DEFAULT_AVATAR", "https://archive.org/download/discordprofilepictures/discordred.png")
+def encode_font(font_path):
+    with open(font_path, "rb") as font_file:
+        return base64.b64encode(font_file.read()).decode("utf-8")
 
-if not BOT_TOKEN:
-    try:
-        config = json.load(open("config/config.json"))
-        BOT_TOKEN = config.get("bot_token", "")
-        DEFAULT_AVATAR = config.get("default_avatar", DEFAULT_AVATAR)
-    except Exception:
-        pass
-
-# ── html2image: use system Chromium on Linux (Railway), else auto-detect ──
-chromium_path = "/run/current-system/sw/bin/chromium"
-if not os.path.exists(chromium_path):
-    chromium_path = "/usr/bin/chromium"
-if not os.path.exists(chromium_path):
-    chromium_path = "/usr/bin/chromium-browser"
-if not os.path.exists(chromium_path):
-    chromium_path = None   # let html2image auto-detect on Windows
-
-hti_flags = [
-    "--no-sandbox",
-    "--disable-dev-shm-usage",
-    "--disable-gpu",
-    "--default-background-color=ffffff",
-]
-if chromium_path:
-    hti = Html2Image(browser_executable=chromium_path, custom_flags=hti_flags)
-else:
-    hti = Html2Image(custom_flags=["--default-background-color=ffffff"])
-
-# ── Fonts (base64-encoded so they work anywhere) ──
-def encode_file(path):
-    with open(path, "rb") as f:
-        return base64.b64encode(f.read()).decode("utf-8")
-
-font_b64        = encode_file(f"{current_directory}/assets/fonts/ggsans-regular.ttf")
-fontmed_base64  = encode_file(f"{current_directory}/assets/fonts/ggsans-medium.ttf")
-
-# ── Nitro preset images (base64-encoded so file:// paths are not needed) ──
-nitro_classic_b64 = encode_file(f"{current_directory}/assets/nitro_presets/nitro_classic_preset.png")
-nitro_promo_b64   = encode_file(f"{current_directory}/assets/nitro_presets/nitro_promo_preset.png")
-nitro_boost_b64   = encode_file(f"{current_directory}/assets/nitro_presets/nitro_boost_preset.png")
-
+font_b64 = encode_font(f"{current_directory}/assets/fonts/ggsans-regular.ttf")
+fontmed_base64 = encode_font(f"{current_directory}/assets/fonts/ggsans-medium.ttf")
 
 class BoostPage:
     def __init__(self, nitro_type, authorname, authoravatar, authortext, receiveravatar, receivername, receivertext, requestmsg=None, show_request=False):
@@ -88,13 +52,13 @@ class BoostPage:
     def get_proof(self):
         if self.nitro_type == "classic":
             nitro_link = "https://discord.gift/"
-            nitro_image = f"data:image/png;base64,{nitro_classic_b64}"
+            nitro_image = f"file://{current_directory}/assets/nitro_presets/nitro_classic_preset.png"
         elif self.nitro_type == "promo":
             nitro_link = "https://discord.com/billing/promotions/"
-            nitro_image = f"data:image/png;base64,{nitro_promo_b64}"
+            nitro_image = f"file://{current_directory}/assets/nitro_presets/nitro_promo_preset.png"
         else:
             nitro_link = "https://discord.gift/"
-            nitro_image = f"data:image/png;base64,{nitro_boost_b64}"
+            nitro_image = f"file://{current_directory}/assets/nitro_presets/nitro_boost_preset.png"
 
         request_html = ""
         if self.show_request:
@@ -111,7 +75,7 @@ class BoostPage:
     </div>
             """
 
-        with open("assets/index.html", 'r') as boost_page:
+        with open(f"{current_directory}/assets/index.html", 'r') as boost_page:
             self.proof = boost_page.read() \
                 .replace('GGSANSFONT', f"data:font/ttf;base64,{font_b64}") \
                 .replace('GGSANSMEDIUMFONT', f"data:font/ttf;base64,{fontmed_base64}") \
@@ -204,8 +168,8 @@ class NitroProofCustom(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
         try:
-            self.receiveravatar_value = self.receiveravatar.value if self.receiveravatar.value else DEFAULT_AVATAR
-            author_avatar = interaction.user.display_avatar.url if interaction.user.avatar else DEFAULT_AVATAR
+            self.receiveravatar_value = self.receiveravatar.value if self.receiveravatar.value else config["default_avatar"]
+            author_avatar = interaction.user.display_avatar.url if interaction.user.avatar else config["default_avatar"]
             proof = BoostPage(
                 self.nitrotype.value, 
                 interaction.user.display_name, 
@@ -272,8 +236,8 @@ class NitroProofId(discord.ui.Modal):
         await interaction.response.defer(ephemeral=True)
         try:
             self.user = await client.fetch_user(int(self.receiverid.value))
-            self.author_avatar = interaction.user.display_avatar.url if interaction.user.avatar else DEFAULT_AVATAR
-            self.receiver_avatar = self.user.display_avatar.url if self.user.avatar else DEFAULT_AVATAR
+            self.author_avatar = interaction.user.display_avatar.url if interaction.user.avatar else config["default_avatar"]
+            self.receiver_avatar = self.user.display_avatar.url if self.user.avatar else config["default_avatar"]
             proof = BoostPage(
                 self.nitrotype.value, 
                 interaction.user.name, 
@@ -318,4 +282,4 @@ async def proof(interaction: discord.Interaction, receiverinfo: str, requestmsg:
 
 
 if __name__ == '__main__':
-    client.run(BOT_TOKEN)
+    client.run(config['bot_token'])
